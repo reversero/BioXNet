@@ -1,0 +1,1 @@
+All the data necessary to train the BioXNet model can be found at this [link](https://drive.google.com/file/d/1roNYMD1R3Qhed7f6dkzDNDNwSq7T5QRg/view?usp=sharing). Please download and unzip the data, and then place it in current folder.
