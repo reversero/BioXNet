@@ -20,13 +20,14 @@ class TCGAData():
         self.data_path = data_dir
         self.logger = logger
         self.data_list = data_list
-        self.tcga_data_path = join(data_dir, 'TCGA', 'prepared')
-        self.tcga_processed_path = join(data_dir, 'TCGA', 'processed')
         self.mut_binry = mut_binary
         self.selected_genes = selected_genes
         self.combine_type = combine_type
         self.use_coding_genes_only = use_coding_genes_only
         self.binary_response = binary_response
+        
+        self.tcga_data_path = join(data_dir, 'TCGA', 'prepared')
+        self.tcga_processed_path = join(data_dir, 'TCGA', 'processed')
 
         if exists(join(self.tcga_processed_path, 'cnv_allgenes.csv')) and \
             exists(join(self.tcga_processed_path, 'methylation_allgenes.csv')) and \
@@ -175,11 +176,27 @@ class TCGAData():
         joined_df = joined_df.fillna(0)
         return joined_df
 
+
+    '''
+        计算数据框中每个类别的样本数量：
+            - 遍历数据框中的每个响应值
+            - 对于每个响应值，计算该响应值在数据框中出现的次数，并记录下来
+            - 将每个响应值及其对应的样本数量打印出来
+    '''
     def _get_class_num(self, df, data='train'):
         self.logger.info(f'The number of samples for each response value in {data}:')
         for response_value in set(df['drug_response']):
             self.logger.info(f'{response_value}: {len(df[df["drug_response"]==response_value])}')
 
+
+    '''
+        计算类别权重，以用于对不平衡类别进行处理：
+            - 首先检查响应是否为二元响应（binary_response == True）
+            - 如果是二元响应，则打印消息指示创建二元响应的类别权重；如果不是，则指示创建多类别响应的类别权重
+            - 获取训练集中每个样本的响应标签，并存储在列表 label_list 中
+            - 使用 class_weight.compute_class_weight 函数计算每个类别的权重。参数 class_weight='balanced' 表示计算平衡的类别权重
+            - 返回计算得到的类别权重
+    '''
     def get_class_weights(self, response_train_array):
         if self.binary_response == True:
             self.logger.info('Create class weights for binary response.')

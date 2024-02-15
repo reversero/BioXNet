@@ -3,7 +3,13 @@ from abc import abstractmethod
 from numpy import inf
 from logger import TensorboardWriter
 
-
+'''
+    基础的训练器类，用于在训练神经网络模型时进行通用操作:
+        - 将模型、损失函数、优化器等移动到指定的设备上，并支持多 GPU 训练
+        - 定义了训练一个 epoch 的逻辑，具体的训练过程需要在子类中实现
+        - 实现了整个训练流程，包括保存模型、监控指标、提前停止等功能
+        - 支持从断点恢复训练
+'''
 class BaseTrainer:
     """
     Base class for all trainers
@@ -57,8 +63,16 @@ class BaseTrainer:
 
         :param epoch: Current epoch number
         """
-        raise NotImplementedError
+        raise NotImplementedError # 报错
 
+
+    '''
+        执行完整的模型训练:
+            - 迭代每个 epoch，调用 _train_epoch 方法执行训练，并将结果记录到日志中
+            - 评估模型性能，并根据指定的监控指标决定是否保存模型的检查点
+            - 如果设置了保存最佳模型，保存最佳模型的检查点
+            - 如果模型性能在一定数量的 epoch 中没有改善，则停止训练
+    '''
     def train(self):
         """
         Full training logic
@@ -89,6 +103,13 @@ class BaseTrainer:
                     # use minus to make sure the loss is decreasing
                     improved = (self.mnt_mode == 'min' and (log[self.mnt_metric] - self.mnt_best) <= 1e-4) or \
                                (self.mnt_mode == 'max' and (log[self.mnt_metric] - self.mnt_best) >= 1e-4)
+                    '''
+                    在尝试检查性能改善时，会根据设定的监视模式（最小化或最大化）和指定的指标 mnt_metric，来判断性能是否有所提升
+                    具体来说，如果监视模式是最小化，那么只有当当前指标值比历史最佳指标值小一定的阈值（这里是1e-4）时，才认为性能有所提升
+                    如果监视模式是最大化，那么只有当当前指标值比历史最佳指标值大一定的阈值时才认为性能有所提升
+                    这里的1e-4是一个可调的参数，可以根据具体情况进行调整
+                    （有的指标值越大，模型性能越好，e.g., R2，有的则越小越好，e.g., MSE）
+                    '''
                 except KeyError:
                     self.logger.warning("Warning: Metric '{}' is not found. "
                                         "Model performance monitoring is disabled.".format(self.mnt_metric))
@@ -111,6 +132,14 @@ class BaseTrainer:
             if epoch % self.save_period == 0:
                 self._save_checkpoint(epoch, save_best=False)
 
+
+    '''
+        准备设备:
+            - 通过 torch.cuda.device_count() 获取可用的 GPU 数量
+            - 检查用户配置的 GPU 数量是否大于 0，如果是且没有可用的 GPU，则发出警告并将 n_gpu_use 设置为 0，表示将在 CPU 上进行训练
+            - 如果用户配置的 GPU 数量大于可用的 GPU 数量，则发出警告，并将 n_gpu_use 设置为可用的 GPU 数量
+            - 根据 n_gpu_use 的值选择设备，如果大于 0，则选择第一个 GPU，否则选择 CPU
+    '''
     def _prepare_device(self, n_gpu_use):
         """
         setup GPU device if available, move model into configured device
@@ -128,6 +157,14 @@ class BaseTrainer:
         list_ids = list(range(n_gpu_use))
         return device, list_ids
 
+
+    '''
+        保存训练过程中的检查点:
+            - 获取模型的名称，并将其存储在变量 arch 中
+            - 创建一个字典 state，其中包含了要保存的信息，包括模型的状态字典、优化器的状态字典、当前的 epoch 数、最佳监控指标值、以及配置信息
+            - 如果 save_best 参数为 True，则将检查点保存为 model_best.pth，如果存在属性 current_k，则在文件名中包含当前 K 值
+            - 如果 save_best 参数为 False，则将检查点保存为 checkpoint-epoch{}.pth，其中 {} 会被当前的 epoch 数替换
+    '''
     def _save_checkpoint(self, epoch, save_best=False):
         """
         Saving checkpoints
@@ -157,6 +194,17 @@ class BaseTrainer:
             torch.save(state, filename)
             self.logger.info("Saving checkpoint: {} ...".format(filename))
 
+
+    '''
+        从已保存的检查点中恢复训练:
+            - 将输入的检查点路径转换为字符串类型，并记录日志，指示正在加载检查点
+            - 使用 torch.load 加载检查点文件，将其保存在 checkpoint 变量中
+            - 获取检查点中的 epoch 数，并将其加1，以便从下一个 epoch 开始训练
+            - 更新监视的最佳指标值，以便在需要时更新模型的性能
+            - 检查配置文件中的模型架构是否与检查点中的架构匹配，如果不匹配，则记录警告。然后加载模型的状态字典
+            - 检查配置文件中的优化器类型是否与检查点中的类型匹配，如果不匹配，则记录警告。然后加载优化器的状态字典
+            - 记录日志，指示检查点已加载完成，并显示从哪个 epoch 开始恢复训练
+    '''
     def _resume_checkpoint(self, resume_path):
         """
         Resume from saved checkpoints

@@ -6,6 +6,7 @@ from pathlib import Path
 
 class GDSCDataPrepare():
     def __init__(self, logger, data_dir, save_dir, recreate=False):
+        # 分析日志 + 保存路径
         self.logger = logger
         self.processed_dir = Path(save_dir).joinpath('prepared')
         if os.path.exists(self.processed_dir):
@@ -15,7 +16,7 @@ class GDSCDataPrepare():
         self.data_dir = Path(data_dir)
         self.recreate = recreate
 
-        # remove silent and intron mutations
+        # remove silent and intron mutations 过滤突变信息
         self.filter_silent_muts = False
         self.filter_missense_muts = False
         self.filter_introns_muts = False
@@ -34,12 +35,14 @@ class GDSCDataPrepare():
         if self.filter_introns_muts:
             self.ext = self.ext + "_no_introns"
 
+        # 获取数据
         self.selected_cellLine_list = self.prepare_response()
         drug_list = self.prepare_drug_target()
         cnv_cellLine_list = self.prepare_cnv()
         methylation_cellLine_list = self.prepare_methylation450K()
         mutation_cellLine_list = self.prepare_mutation()
 
+        # 保留有所有组学数据的cell line（取交集）
         cellLine_list = list(set(self.selected_cellLine_list) &
                              set(cnv_cellLine_list) &
                              set(methylation_cellLine_list) &
@@ -311,6 +314,7 @@ class GDSCDataPrepare():
 
 import logging
 
+# 设置日志记录的配置
 logging.basicConfig(level=logging.DEBUG, filename='GDSC_Data_Prepare.log', filemode='w',
                     format="%(asctime)s - %(name)s - %(message)s")
 console = logging.StreamHandler()

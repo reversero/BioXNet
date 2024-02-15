@@ -7,6 +7,24 @@ from datetime import datetime
 from logger import setup_logging
 from utils import read_json, write_json
 
+'''
+ConfigParser 作用：
+
+    - 解析配置文件： ConfigParser 可以解析包含训练、模型和数据加载器等配置信息的 JSON 文件。
+    
+    - 管理配置信息： 它负责管理配置信息，包括超参数、模型保存路径、日志保存路径等。
+    
+    - 初始化模块： 它可以根据配置文件中指定的模块类型和参数，初始化相应的模块实例。
+    
+    - 处理命令行参数： 可以从命令行参数中读取配置文件路径，并根据命令行参数更新配置文件中的信息。
+    
+    - 设置日志记录： 它负责设置日志记录器，包括日志级别、日志保存路径等。
+    
+    - 提供日志记录器： 提供了获取日志记录器的方法，使得其他模块可以方便地记录日志。
+    
+    - 管理保存路径： 管理模型保存路径和日志保存路径，确保保存目录存在并正确创建。
+
+'''
 
 class ConfigParser:
     def __init__(self, config, resume=None, modification=None, run_id=None):
@@ -77,6 +95,11 @@ class ConfigParser:
         modification = {opt.target : getattr(args, _get_opt_name(opt.flags)) for opt in options}
         return cls(config, resume, modification)
 
+    '''
+
+        根据配置文件中的信息找到对应的模块和对象类型，然后初始化该对象，并根据配置文件中给定的参数进行参数设置
+        
+    '''
     def init_obj(self, name, module, *args, **kwargs):
         """
         Finds a function handle with the name given as 'type' in config, and returns the
@@ -114,8 +137,8 @@ class ConfigParser:
     def get_logger(self, name, verbosity=2):
         msg_verbosity = 'verbosity option {} is invalid. Valid options are {}.'.format(verbosity, self.log_levels.keys())
         assert verbosity in self.log_levels, msg_verbosity
-        logger = logging.getLogger(name)
-        logger.setLevel(self.log_levels[verbosity])
+        logger = logging.getLogger(name) # 用 logging 包的 getLogger 函数创建一个新的日志记录器对象，并将其命名为传入的 name 参数
+        logger.setLevel(self.log_levels[verbosity]) # setLevel 函数设置日志记录器的日志级别
         return logger
 
     # setting read-only attributes

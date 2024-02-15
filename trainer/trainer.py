@@ -20,7 +20,7 @@ class Trainer(BaseTrainer):
         self.train_data_loader = train_data_loader
         if len_epoch is None:
             # epoch-based training
-            self.len_epoch = len(self.train_data_loader)
+            self.len_epoch = len(self.train_data_loader) # 最大 epoch 数 = 批次数量
         else:
             # iteration-based training
             self.train_data_loader = inf_loop(train_data_loader)
@@ -43,11 +43,19 @@ class Trainer(BaseTrainer):
         self.train_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_fns], writer=self.writer)
         self.valid_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_fns], writer=self.writer)
 
+
+    '''
+        计算损失函数:
+            - 如果输出有多个，即 self.n_outputs > 1，则遍历每个输出，并根据权重 self.loss_weights 计算加权损失
+                损失的计算通过 self.criterion 完成，如果存在类别权重 self.class_weights，则将其应用于损失计算中
+            - 如果只有一个输出，即 self.n_outputs == 1，则直接计算输出和目标之间的损失。同样，如果存在类别权重 self.class_weights，也会将其应用于损失计算中
+    '''
     def _compute_loss(self, outcome, decision_outcomes, target):
+        # loss = self._compute_loss(outcome=outcome, decision_outcomes=decision_outcomes, target=target) # 计算损失函数
         if self.n_outputs > 1:
             output = decision_outcomes
             loss = 0
-            for i, lw in enumerate(self.loss_weights):
+            for i, lw in enumerate(self.loss_weights): # "loss_weights": [2, 7, 20, 54, 148, 400]。确定该超参数的依据？
                 if self.class_weights is None:
                     loss += lw * self.criterion(output[i], target)
                 else:
@@ -62,6 +70,17 @@ class Trainer(BaseTrainer):
                 class_weights = torch.tensor(self.class_weights, dtype=torch.float32).to(target.device)
                 return self.criterion(output, target, class_weights)
 
+
+    '''
+        获取预测分数:
+            - 如果有多个输出（self.n_outputs > 1），则根据 self.prediction_output 参数来计算预测分数：
+                - 如果 self.prediction_output 为 'average'，则计算所有输出的平均值
+                - 如果 self.prediction_output 为 'weighted'，则根据损失权重 self.loss_weights 加权计算输出的加权平均值
+                - 如果 self.prediction_output 其他值，则取最后一个输出
+            - 如果只有一个输出（self.n_outputs == 1），则根据 self.class_num 参数和输出类型进行如下处理：
+                - 如果是多类别分类（self.class_num > 2），则对输出进行 softmax 归一化处理
+                - 如果是二分类（self.class_num == 2），则对输出进行 sigmoid 处理
+    '''
     def _get_prediction_scores(self, outcome, decision_outcomes):
         if self.n_outputs > 1:
             if self.class_num is not None and self.class_num > 2:
@@ -78,6 +97,7 @@ class Trainer(BaseTrainer):
                 prediction_score = np.average(output, axis=0, weights=self.loss_weights)
             else:
                 prediction_score = output[-1]
+                
         else:
             if self.class_num is not None and self.class_num > 2:
                 outcome = torch.log_softmax(outcome, dim=1)
@@ -106,13 +126,13 @@ class Trainer(BaseTrainer):
                 outcome, _ = self.model(data)
                 decision_outcomes = None
 
-            loss = self._compute_loss(outcome=outcome, decision_outcomes=decision_outcomes, target=target)
-            loss.backward()
-            self.optimizer.step()
+            loss = self._compute_loss(outcome=outcome, decision_outcomes=decision_outcomes, target=target) # 计算损失函数
+            loss.backward() # 反向传播
+            self.optimizer.step() # optimizer 更新参数
 
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
-            self.train_metrics.update('loss', loss.item())
-            with torch.no_grad():
+            self.train_metrics.update('loss', loss.item()) # 使用 update 方法将新的指标值添加到指定的指标名称下，在训练过程中跟踪和记录各种指标的变化
+            with torch.no_grad(): # 不计算梯度，计算预测结果，并更新评估指标
                 y_pred = self._get_prediction_scores(outcome, decision_outcomes).squeeze()
                 y_true = target.cpu().detach().numpy().squeeze()
                 for met in self.metric_fns:
@@ -181,6 +201,7 @@ class Trainer(BaseTrainer):
 
     def test(self, test_result_filename=None):
         self.model.eval()
+        # 创建一个字典 result_dict，用于存储测试结果，其中包含了样本ID、药物ID、真实标签和预测标签
         result_dict = {'sample_id': [], 'drug_id': [],
                        'y_true': [], 'y_pred': []}
         # attention_list = []
@@ -223,7 +244,7 @@ class Trainer(BaseTrainer):
         if test_result_filename is not None:
             test_output.to_csv(join(self.config.log_dir, test_result_filename), index=False)
         else:
-            test_output.to_csv(join(self.config.log_dir, 'test_output.csv'), index=False)
+            test_output.to_csv(join(self.config.log_dir, 'test_output.csv'), index=False) # 结果保存到 log 文件夹中
 
         return test_metrics
 

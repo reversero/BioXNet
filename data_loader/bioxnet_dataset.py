@@ -19,6 +19,14 @@ class BioXNetDataset(Dataset):
     def __len__(self):
         return len(self.response_array)
 
+
+    '''
+        根据索引 idx 获取数据集中的一个样本:
+            - 根据索引从 response_array 中获取样本的ID、药物ID和响应值。然后，分别从四个数据字典中获取样本的突变、CNV、甲基化和药物靶标信息
+            - 根据 input_data_order 参数决定数据的顺序，构建输入列表 input_list
+            - 将 input_list 转换为 PyTorch 的张量 input_tensor 和 response_tensor
+            - 返回样本ID、药物ID、输入张量和响应张量
+    '''
     def __getitem__(self, idx):
         sample_id, drug_id, response = self.response_array[idx]
 
